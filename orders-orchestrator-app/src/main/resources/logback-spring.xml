@@ -1,0 +1,18 @@
+<configuration>
+  <appender name="STRUCTURED_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+      <layout class="org.springframework.boot.logging.logback.JsonLayout">
+        <timestampFormat>ISO_OFFSET_DATE_TIME</timestampFormat>
+        <appendLineSeparator>true</appendLineSeparator>
+        <includeException>true</includeException>
+        <includeContextName>true</includeContextName>
+        <includeMdc>true</includeMdc>
+        <includeMessage>true</includeMessage>
+        <includeThreadName>true</includeThreadName>
+      </layout>
+    </encoder>
+  </appender>
+  <root level="INFO">
+    <appender-ref ref="STRUCTURED_CONSOLE"/>
+  </root>
+</configuration>

@@ -1,0 +1,53 @@
+logging:
+  structured:
+    format:
+      console: json
+      file: json
+  json:
+    console:
+      enabled: true
+    file:
+      enabled: true
+
+spring:
+  application:
+    name: orders-orchestrator
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${GROUP_ID:orders-orchestrator}
+    producer:
+      transaction-id-prefix: orders-tx-
+  datasource:
+    url: ${JDBC_URL:jdbc:postgresql://localhost:5432/orch?reWriteBatchedInserts=true}
+    username: ${JDBC_USER:postgres}
+    password: ${JDBC_PASSWORD:postgres}
+    hikari:
+      connection-timeout: 250
+      validation-timeout: 250
+      maximum-pool-size: 8
+
+orchestrator:
+  failure-mode: ${FAILURE_MODE:ATOMIC}        # ATOMIC | SKIP_AND_LOG
+  non-atomic-max-attempts: ${NON_ATOMIC_MAX_ATTEMPTS:3}
+  consumer-topic: ${SOURCE_TOPIC:orders.raw}
+  producer-topic: ${TARGET_TOPIC:orders.enriched}
+  group-id: ${GROUP_ID:orders-orchestrator}
+  batch-enabled: true
+  consumer-concurrency: ${CONCURRENCY:3}
+  db-strategy: ${DB_STRATEGY:RELIABLE}        # OUTBOX | RELIABLE | LIGHTWEIGHT
+  error-table: ${ERROR_TABLE:event_failures}
+  db-timeout-ms: ${DB_TIMEOUT_MS:150}
+  db-degrade-dont-block: true
+  store-payload: ${STORE_PAYLOAD:NONE}         # NONE | BYTES | TEXT
+  store-payload-on-failure-only: ${STORE_PAYLOAD_ON_FAILURE_ONLY:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,metrics,prometheus"
+  endpoint:
+    health:
+      probes:
+        enabled: true
