@@ -73,7 +73,7 @@ Validate every change with a load test (`load-test/` scripts) and inspect consum
 ## Observability & Safe Rollouts
 
 - Set a distinct `spring.kafka.properties.client.id` per deployment to trace metrics.
-- Watch Micrometer counters (`orch.transform.fail`, `orch.db.circuit.open` ) and Kafka lag dashboards while testing new settings.
+- Watch Micrometer counters (`orch.transform.fail`, `orch.db.circuit.open`) and Kafka lag dashboards while testing new settings.
 - Keep `transaction.timeout.ms` above the longest expected DB+transform time but below the consumer `max.poll.interval.ms`.
 - Always perform back-to-back deployments with the same transactional ID prefix when changing producer configs, otherwise in-flight transactions may abort.
 - When in doubt, revert to the starter defaults by removing overrides and restarting; the auto-config will reapply the safe baseline.
