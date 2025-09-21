@@ -25,7 +25,9 @@
       "Bash(set TARGET_MESSAGES=1000)",
       "Bash(./load-test/docker-load-test.sh:*)",
       "Bash(set TARGET_MESSAGES=1000000)",
-      "Bash(set KAFKA_BOOTSTRAP_SERVERS=localhost:9094)"
+      "Bash(set KAFKA_BOOTSTRAP_SERVERS=localhost:9094)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn test:*)"
     ],
     "deny": [],
     "ask": []

@@ -9,6 +9,7 @@ import com.acme.orch.starter.db.JdbcFailureTracker;
 import com.acme.orch.starter.db.NoopFailureTracker;
 import com.acme.orch.starter.runtime.DbDegradedHealthIndicator;
 import com.acme.orch.starter.runtime.OrchestratorService;
+import com.acme.orch.starter.runtime.RefactoredOrchestratorService;
 import com.acme.orch.starter.runtime.TimeoutSafeguard;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -247,7 +248,7 @@ public class OrchestratorAutoConfiguration {
     }
 
     @Bean
-    public OrchestratorService orchestratorService(
+    public RefactoredOrchestratorService orchestratorService(
         @Qualifier("transactionalKafkaTemplate") KafkaTemplate<String, String> transactionalTemplate,
         @Qualifier("nonTransactionalKafkaTemplate") KafkaTemplate<String, String> nonTransactionalTemplate,
         OrchestratorProperties properties,
@@ -255,7 +256,7 @@ public class OrchestratorAutoConfiguration {
         FailureTracker failureTracker,
         MeterRegistry meterRegistry
     ) {
-        return new OrchestratorService(transactionalTemplate, nonTransactionalTemplate, properties, transformer, failureTracker, meterRegistry);
+        return new RefactoredOrchestratorService(transactionalTemplate, nonTransactionalTemplate, properties, transformer, failureTracker, meterRegistry);
     }
 
     @Bean

@@ -4,6 +4,23 @@
       "name": "orchestrator",
       "type": "com.acme.orch.starter.config.OrchestratorProperties",
       "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.kafka",
+      "type": "com.acme.orch.starter.config.KafkaClientProperties",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties"
+    },
+    {
+      "name": "orchestrator.kafka.consumer",
+      "type": "com.acme.orch.starter.config.KafkaClientProperties$Consumer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties",
+      "sourceMethod": "public com.acme.orch.starter.config.KafkaClientProperties.Consumer getConsumer() "
+    },
+    {
+      "name": "orchestrator.kafka.producer",
+      "type": "com.acme.orch.starter.config.KafkaClientProperties$Producer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties",
+      "sourceMethod": "public com.acme.orch.starter.config.KafkaClientProperties.Producer getProducer() "
     }
   ],
   "properties": [
@@ -81,6 +98,161 @@
       "name": "orchestrator.group-id",
       "type": "java.lang.String",
       "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.auto-offset-reset",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.bootstrap-servers",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.client-id",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.enable-auto-commit",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.error-handling-deserializer",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.fetch-max-wait",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.fetch-min-bytes",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.group-id",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.heartbeat-interval",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.isolation-level",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.max-partition-fetch-bytes",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.max-poll-interval",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.max-poll-records",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.receive-buffer",
+      "type": "org.springframework.util.unit.DataSize",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.request-timeout",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.send-buffer",
+      "type": "org.springframework.util.unit.DataSize",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.consumer.session-timeout",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Consumer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.acks",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.bootstrap-servers",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.buffer-memory",
+      "type": "org.springframework.util.unit.DataSize",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.client-id",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.compression-type",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.delivery-timeout",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.enable-idempotence",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.linger",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.max-in-flight-requests-per-connection",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.max-request-size",
+      "type": "org.springframework.util.unit.DataSize",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.request-timeout",
+      "type": "java.time.Duration",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.retries",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
+    },
+    {
+      "name": "orchestrator.kafka.producer.transaction-id-prefix",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.KafkaClientProperties$Producer"
     },
     {
       "name": "orchestrator.non-atomic-max-attempts",
