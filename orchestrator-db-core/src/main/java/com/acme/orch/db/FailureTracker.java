@@ -17,4 +17,6 @@ public interface FailureTracker {
     void insertLightweightFailure(FailureRecord record);
 
     int markTimedOutReceivedAsFailed(long olderThanMinutes);
+
+    default boolean isCircuitOpen() { return false; }
 }

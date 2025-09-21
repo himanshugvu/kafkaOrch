@@ -1,0 +1,3 @@
+com\acme\orch\db\FailureTracker.class
+com\acme\orch\db\model\FailureRecord$Builder.class
+com\acme\orch\db\model\FailureRecord.class

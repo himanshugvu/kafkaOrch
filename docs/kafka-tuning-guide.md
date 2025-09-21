@@ -46,7 +46,9 @@ The accompanying `logback-spring.xml` delegates to `org.springframework.boot.log
 
 ## Cross-Cutting Tweaks
 
-- **Failure handling**: Toggle `orchestrator.failure-mode` to `SKIP_AND_LOG` to continue processing when a record fails after `non-atomic-max-attempts` retries; leave it as `ATOMIC` to keep the default all-or-nothing batch transaction.
+- **Failure handling**: Toggle `orchestrator.failure-mode` to `SKIP_AND_LOG` to continue processing when a record fails after `non-atomic-max-attempts` retries. Offsets still advance, so rely on the failure table/DLQ for replay; leave it `ATOMIC` to keep the default all-or-nothing batch transaction.
+- **DB circuit breaker**: Tune `orchestrator.db-circuit-failure-threshold` and `orchestrator.db-circuit-open-ms` to control how quickly inserts/updates short-circuit when the datastore is unavailable. Gauges `orch.db.circuit.open` and `orch.db.degraded` expose runtime state.
+- **Log shipping**: Set `LOGGING_LOGSTASH_DESTINATION` if you want logs forwarded to Logstash; otherwise the JSON console output remains usable locally.
 - **Observability**: Enable `kafka.client.id` with a descriptive name, turn on Micrometer timers (`KafkaTemplate#setObservationEnabled(true)` already done) and export client metrics via JMX or Micrometer.
 - **Backpressure**: Monitor `consumer_lag` from Kafka metrics, and add app-level counters such as `orch.records.ok`, `orch.transform.fail` (already provided) to alert when spikes occur.
 - **Security**: For TLS/SASL clusters, benchmark with `ssl.endpoint.identification.algorithm=https`, `ssl.protocol=TLSv1.2` or `v1.3` and ensure `sasl.mechanism` matches broker (e.g. `PLAIN`, `SCRAM-SHA-512`). Keep separate config profiles in `application.yml`.

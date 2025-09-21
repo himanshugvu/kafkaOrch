@@ -103,13 +103,13 @@ public final class FailureRecord {
     @Override
     public String toString() {
         return "FailureRecord{" +
-            "sourceTopic='" + sourceTopic + ''' +
-            ", targetTopic='" + targetTopic + ''' +
+            "sourceTopic='" + sourceTopic + '\'' +
+            ", targetTopic='" + targetTopic + '\'' +
             ", partition=" + partition +
             ", offset=" + offset +
-            ", dedupKey='" + dedupKey + ''' +
-            ", status='" + status + ''' +
-            '}';
+            ", dedupKey='" + dedupKey + '\'' +
+            ", status='" + status + '\'' +
+            "}";
     }
 
     @Override

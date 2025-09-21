@@ -7,11 +7,15 @@ import com.acme.orch.starter.config.OrchestratorProperties;
 import com.acme.orch.starter.config.OrchestratorProperties.DbStrategy;
 import com.acme.orch.starter.config.OrchestratorProperties.FailureMode;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
@@ -19,15 +23,18 @@ import org.springframework.kafka.support.Acknowledgment;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class OrchestratorService {
+    private static final Logger log = LoggerFactory.getLogger(OrchestratorService.class);
     private static final String DEDUP_HEADER = "orchestrator-dedup-key";
 
-    private final KafkaTemplate<String, String> template;
+    private final KafkaTemplate<String, String> transactionalTemplate;
+    private final KafkaTemplate<String, String> nonTransactionalTemplate;
     private final OrchestratorProperties props;
     private final MessageTransformer transformer;
     private final FailureTracker failureTracker;
@@ -36,17 +43,24 @@ public class OrchestratorService {
     private final ExecutorService transformPool = Executors.newVirtualThreadPerTaskExecutor();
 
     public OrchestratorService(
-        KafkaTemplate<String, String> template,
+        KafkaTemplate<String, String> transactionalTemplate,
+        KafkaTemplate<String, String> nonTransactionalTemplate,
         OrchestratorProperties props,
         MessageTransformer transformer,
         FailureTracker failureTracker,
         MeterRegistry meter
     ) {
-        this.template = template;
+        this.transactionalTemplate = transactionalTemplate;
+        this.nonTransactionalTemplate = nonTransactionalTemplate;
         this.props = props;
         this.transformer = transformer;
         this.failureTracker = failureTracker;
         this.meter = meter;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        transformPool.shutdown();
     }
 
     @KafkaListener(
@@ -58,32 +72,31 @@ public class OrchestratorService {
                          Consumer<?, ?> consumer) {
 
         if (props.getFailureMode() == FailureMode.SKIP_AND_LOG) {
-            boolean receivedPreInserted = false;
-            if (props.getDbStrategy() == DbStrategy.OUTBOX) {
-                failureTracker.insertRow(row(rec, "RECEIVED", null, false));
-                receivedPreInserted = true;
-            }
-            processRecordNonAtomic(rec, true, receivedPreInserted);
+            processRecordNonAtomic(rec, true);
             ack.acknowledge();
             return;
         }
 
         final String dedupKey = dedupKey(rec.topic(), rec.partition(), rec.offset());
+        MDC.put("dedupKey", dedupKey);
+        try {
+            transactionalTemplate.executeInTransaction(ops -> {
+                try {
+                    String out = transformer.transform(rec.value());
+                    ops.send(producerRecord(rec, out, dedupKey)).get();
 
-        template.executeInTransaction(ops -> {
-            try {
-                String out = transformer.transform(rec.value());
-                ops.send(producerRecord(rec, out, dedupKey)).get();
-
-                var offsets = new HashMap<TopicPartition, OffsetAndMetadata>(1);
-                offsets.put(new TopicPartition(rec.topic(), rec.partition()), new OffsetAndMetadata(rec.offset() + 1));
-                ops.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
-                return true;
-            } catch (Exception ex) {
-                handleFailure(rec, ex);
-                throw new RuntimeException(ex);
-            }
-        });
+                    var offsets = new HashMap<TopicPartition, OffsetAndMetadata>(1);
+                    offsets.put(new TopicPartition(rec.topic(), rec.partition()), new OffsetAndMetadata(rec.offset() + 1));
+                    ops.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+                    return true;
+                } catch (Exception ex) {
+                    handleFailure(rec, ex);
+                    throw new RuntimeException(ex);
+                }
+            });
+        } finally {
+            MDC.remove("dedupKey");
+        }
 
         ack.acknowledge();
         meter.counter("orch.records.ok").increment();
@@ -102,15 +115,7 @@ public class OrchestratorService {
         }
 
         if (props.getFailureMode() == FailureMode.SKIP_AND_LOG) {
-            boolean outbox = props.getDbStrategy() == DbStrategy.OUTBOX;
-            if (outbox) {
-                failureTracker.bulkInsertReceived(records.stream()
-                    .map(r -> row(r, "RECEIVED", null, false))
-                    .toList());
-            }
-            for (var rec : records) {
-                processRecordNonAtomic(rec, false, outbox);
-            }
+            records.forEach(rec -> processRecordNonAtomic(rec, false));
             ack.acknowledge();
             return;
         }
@@ -121,7 +126,7 @@ public class OrchestratorService {
             records.forEach(r -> failureTracker.insertRow(row(r, "RECEIVED", null, false)));
         }
 
-        template.executeInTransaction(ops -> {
+        transactionalTemplate.executeInTransaction(ops -> {
             List<CompletableFuture<String>> futures = records.stream()
                 .map(r -> CompletableFuture.supplyAsync(() -> {
                     try {
@@ -136,7 +141,19 @@ public class OrchestratorService {
             for (int i = 0; i < records.size(); i++) {
                 var rec = records.get(i);
                 var out = outs.get(i);
-                ops.send(producerRecord(rec, out, dedupKey(rec.topic(), rec.partition(), rec.offset()))).get();
+                String perRecordDedup = dedupKey(rec.topic(), rec.partition(), rec.offset());
+                MDC.put("dedupKey", perRecordDedup);
+                try {
+                    ops.send(producerRecord(rec, out, perRecordDedup)).get();
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(ie);
+                } catch (java.util.concurrent.ExecutionException ee) {
+                    Throwable cause = ee.getCause();
+                    throw new RuntimeException(cause != null ? cause : ee);
+                } finally {
+                    MDC.remove("dedupKey");
+                }
             }
 
             HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -145,7 +162,7 @@ public class OrchestratorService {
             return true;
         });
 
-        if (props.getDbStrategy() != DbStrategy.LIGHTWEIGHT) {
+        if (props.getDbStrategy() == DbStrategy.RELIABLE || props.getDbStrategy() == DbStrategy.OUTBOX) {
             var keys = records.stream().map(r -> dedupKey(r.topic(), r.partition(), r.offset())).toList();
             failureTracker.updateStatusSuccess(keys);
         }
@@ -155,66 +172,118 @@ public class OrchestratorService {
     }
 
     private void processRecordNonAtomic(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
-                                        boolean recordMode,
-                                        boolean receivedPreInserted) {
+                                        boolean recordMode) {
         DbStrategy strategy = props.getDbStrategy();
         String dedupKey = dedupKey(rec.topic(), rec.partition(), rec.offset());
 
-        if (!receivedPreInserted && strategy == DbStrategy.RELIABLE) {
-            failureTracker.insertRow(row(rec, "RECEIVED", null, false));
+        MDC.put("dedupKey", dedupKey);
+        try {
+            if (strategy == DbStrategy.OUTBOX || strategy == DbStrategy.RELIABLE) {
+                ensureReceivedRow(rec, dedupKey);
+            }
+
+            int attempts = Math.max(1, props.getNonAtomicMaxAttempts());
+            Exception lastException = null;
+            for (int attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    String out = transformer.transform(rec.value());
+                    nonTransactionalTemplate.send(producerRecord(rec, out, dedupKey)).get();
+
+                    if (strategy == DbStrategy.RELIABLE || strategy == DbStrategy.OUTBOX) {
+                        markSuccess(dedupKey);
+                    }
+                    incrementSuccessCounter(recordMode);
+                    return;
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    lastException = ie;
+                    break;
+                } catch (ExecutionException ee) {
+                    Throwable cause = ee.getCause();
+                    lastException = cause instanceof Exception ? (Exception) cause : new RuntimeException(cause);
+                } catch (Exception ex) {
+                    lastException = ex;
+                }
+            }
+
+            recordNonAtomicFailure(rec, dedupKey, lastException);
+        } finally {
+            MDC.remove("dedupKey");
         }
+    }
 
-        int attempts = Math.max(1, props.getNonAtomicMaxAttempts());
-        Exception lastException = null;
-        for (int attempt = 1; attempt <= attempts; attempt++) {
-            try {
-                String out = transformer.transform(rec.value());
-                template.send(producerRecord(rec, out, dedupKey)).get();
-
-                if (strategy != DbStrategy.LIGHTWEIGHT) {
-                    failureTracker.updateStatusSuccess(List.of(dedupKey));
-                }
-                if (recordMode) {
-                    meter.counter("orch.records.ok").increment();
-                } else {
-                    meter.counter("orch.batch.ok").increment();
-                }
-                return;
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                lastException = ie;
-                break;
-            } catch (Exception ex) {
-                lastException = ex;
+    private void ensureReceivedRow(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
+                                   String dedupKey) {
+        try {
+            failureTracker.insertRow(row(rec, "RECEIVED", null, false));
+        } catch (RuntimeException ex) {
+            if (isDuplicateConstraint(ex)) {
+                log.debug("Pre-insert of RECEIVED row skipped for dedup {} ({}).", dedupKey, ex.toString());
+            } else {
+                log.warn("Pre-insert of RECEIVED row failed for dedup {}: {}", dedupKey, ex.toString());
             }
         }
+    }
 
-        recordNonAtomicFailure(rec, dedupKey, lastException);
+    private void markSuccess(String dedupKey) {
+        try {
+            failureTracker.updateStatusSuccess(List.of(dedupKey));
+        } catch (RuntimeException ex) {
+            log.warn("Unable to mark {} as SUCCESS; message was already produced. Cause: {}", dedupKey, ex.toString());
+        }
+    }
+
+    private void incrementSuccessCounter(boolean recordMode) {
+        if (recordMode) {
+            meter.counter("orch.records.ok").increment();
+        } else {
+            meter.counter("orch.batch.ok").increment();
+        }
     }
 
     private void recordNonAtomicFailure(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
                                         String dedupKey,
                                         Exception ex) {
         DbStrategy strategy = props.getDbStrategy();
-        switch (strategy) {
-            case LIGHTWEIGHT -> failureTracker.insertLightweightFailure(row(rec, "FAILED", ex, true));
-            case RELIABLE, OUTBOX -> failureTracker.updateStatusFailed(
-                dedupKey,
-                ex == null ? null : ex.getMessage(),
-                ex == null ? null : stack(ex)
-            );
-        }
         meter.counter("orch.transform.fail").increment();
+        try {
+            switch (strategy) {
+                case LIGHTWEIGHT -> failureTracker.insertLightweightFailure(row(rec, "FAILED", ex, true));
+                case RELIABLE, OUTBOX -> failureTracker.updateStatusFailed(
+                    dedupKey,
+                    ex == null ? null : ex.getMessage(),
+                    ex == null ? null : stack(ex)
+                );
+                case NONE -> { }
+            }
+        } catch (RuntimeException dbEx) {
+            log.error("Failed to persist failure metadata for dedup {}: {}", dedupKey, dbEx.toString());
+        }
+
+        if (ex != null) {
+            log.error("Message {}:{}:{} skipped after {} attempts.", rec.topic(), rec.partition(), rec.offset(),
+                props.getNonAtomicMaxAttempts(), ex);
+        } else {
+            log.error("Message {}:{}:{} skipped after {} attempts due to unknown error.",
+                rec.topic(), rec.partition(), rec.offset(), props.getNonAtomicMaxAttempts());
+        }
     }
 
     private void handleFailure(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
                                Exception ex) {
-        var failureRecord = row(rec, "FAILED", ex, true);
-        switch (props.getDbStrategy()) {
-            case LIGHTWEIGHT -> failureTracker.insertLightweightFailure(failureRecord);
-            case RELIABLE, OUTBOX -> failureTracker.insertRow(failureRecord);
+        String dedupKey = dedupKey(rec.topic(), rec.partition(), rec.offset());
+        MDC.put("dedupKey", dedupKey);
+        try {
+            var failureRecord = row(rec, "FAILED", ex, true);
+            switch (props.getDbStrategy()) {
+                case LIGHTWEIGHT -> failureTracker.insertLightweightFailure(failureRecord);
+                case RELIABLE, OUTBOX -> failureTracker.insertRow(failureRecord);
+                case NONE -> { }
+            }
+            meter.counter("orch.transform.fail").increment();
+        } finally {
+            MDC.remove("dedupKey");
         }
-        meter.counter("orch.transform.fail").increment();
     }
 
     private ProducerRecord<String, String> producerRecord(
@@ -229,6 +298,18 @@ public class OrchestratorService {
 
     private String dedupKey(String topic, int partition, long offset) {
         return topic + ":" + partition + ":" + offset;
+    }
+
+    private boolean isDuplicateConstraint(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("duplicate")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private FailureRecord row(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,

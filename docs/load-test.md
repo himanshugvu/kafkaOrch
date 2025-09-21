@@ -12,13 +12,13 @@ This guide shows how to spin up the orchestrator stack locally, drive 1,000,000 
 
 ```bash
 # Build the application image and start Kafka + Postgres + app
-docker compose up --build kafka postgres orders-orchestrator -d
+docker compose up --build kafka postgres elasticsearch logstash kibana orders-orchestrator -d
 
 # (Optional) tail application logs in structured JSON
 docker compose logs -f orders-orchestrator
 ```
 
-Kafka exposes `localhost:9094` for external tooling; Postgres is reachable at `localhost:5432` (`postgres/postgres`).
+Kafka exposes `localhost:9094` for external tooling; Postgres is reachable at `localhost:5432` (`postgres/postgres`). Elasticsearch listens on `localhost:9200` and Kibana on `http://localhost:5601` for log exploration.
 
 ## 2. Run the Locust Scenario for 1,000,000 Messages
 

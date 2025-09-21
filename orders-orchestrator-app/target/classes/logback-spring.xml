@@ -1,4 +1,6 @@
 <configuration>
+  <springProperty scope="context" name="LOGSTASH_DESTINATION" source="logging.logstash.destination" defaultValue="logstash:5044"/>
+
   <appender name="STRUCTURED_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
     <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
       <layout class="org.springframework.boot.logging.logback.JsonLayout">
@@ -12,7 +14,15 @@
       </layout>
     </encoder>
   </appender>
+
+  <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+    <destination>${LOGSTASH_DESTINATION}</destination>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+    <reconnectionDelay>5000</reconnectionDelay>
+  </appender>
+
   <root level="INFO">
     <appender-ref ref="STRUCTURED_CONSOLE"/>
+    <appender-ref ref="LOGSTASH"/>
   </root>
 </configuration>

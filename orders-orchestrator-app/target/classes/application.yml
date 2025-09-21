@@ -35,10 +35,12 @@ orchestrator:
   group-id: ${GROUP_ID:orders-orchestrator}
   batch-enabled: true
   consumer-concurrency: ${CONCURRENCY:3}
-  db-strategy: ${DB_STRATEGY:RELIABLE}        # OUTBOX | RELIABLE | LIGHTWEIGHT
+  db-strategy: ${DB_STRATEGY:RELIABLE}        # OUTBOX | RELIABLE | LIGHTWEIGHT | NONE
   error-table: ${ERROR_TABLE:event_failures}
   db-timeout-ms: ${DB_TIMEOUT_MS:150}
   db-degrade-dont-block: true
+  db-circuit-failure-threshold: ${DB_CIRCUIT_FAILURE_THRESHOLD:5}
+  db-circuit-open-ms: ${DB_CIRCUIT_OPEN_MS:10000}
   store-payload: ${STORE_PAYLOAD:NONE}         # NONE | BYTES | TEXT
   store-payload-on-failure-only: ${STORE_PAYLOAD_ON_FAILURE_ONLY:true}
 

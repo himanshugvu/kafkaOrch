@@ -1,0 +1,98 @@
+{
+  "groups": [
+    {
+      "name": "orchestrator",
+      "type": "com.acme.orch.starter.config.OrchestratorProperties",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "orchestrator.batch-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.batch-flush-interval-ms",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.batch-max-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.consumer-concurrency",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.consumer-topic",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.db-circuit-failure-threshold",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.db-circuit-open-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.db-degrade-dont-block",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.db-strategy",
+      "type": "com.acme.orch.starter.config.OrchestratorProperties$DbStrategy",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.db-timeout-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.error-table",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.failure-mode",
+      "type": "com.acme.orch.starter.config.OrchestratorProperties$FailureMode",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.group-id",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.non-atomic-max-attempts",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.producer-topic",
+      "type": "java.lang.String",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.store-payload",
+      "type": "java.lang.String",
+      "description": "Payload storage choice: NONE | BYTES | TEXT",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.store-payload-on-failure-only",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    }
+  ],
+  "hints": []
+}

@@ -1,0 +1,3 @@
+com\acme\orch\example\OrdersOrchestratorApplication$1.class
+com\acme\orch\example\OrdersOrchestratorApplication.class
+com\acme\orch\example\transform\RoutedByMessageTransformer.class

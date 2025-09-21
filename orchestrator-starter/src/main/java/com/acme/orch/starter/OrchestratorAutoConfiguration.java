@@ -5,6 +5,7 @@ import com.acme.orch.core.MessageTransformer;
 import com.acme.orch.db.FailureTracker;
 import com.acme.orch.starter.config.OrchestratorProperties;
 import com.acme.orch.starter.db.JdbcFailureTracker;
+import com.acme.orch.starter.db.NoopFailureTracker;
 import com.acme.orch.starter.runtime.DbDegradedHealthIndicator;
 import com.acme.orch.starter.runtime.OrchestratorService;
 import com.acme.orch.starter.runtime.TimeoutSafeguard;
@@ -12,10 +13,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
@@ -27,6 +29,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.*;
@@ -59,25 +62,25 @@ public class OrchestratorAutoConfiguration {
         org.springframework.core.env.Environment env,
         KafkaClientCustomizer customizer
     ) {
-        Map<String, Object> props = new HashMap<>();
-        props.put(BOOTSTRAP_SERVERS_CONFIG, env.getProperty("spring.kafka.bootstrap-servers"));
-        props.put(ENABLE_IDEMPOTENCE_CONFIG, true);
-        props.put(ACKS_CONFIG, "all");
-        props.put(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-        props.put(COMPRESSION_TYPE_CONFIG, "zstd");
-        props.put(LINGER_MS_CONFIG, 15);
-        props.put(BATCH_SIZE_CONFIG, 196_608);
-        props.put(DELIVERY_TIMEOUT_MS_CONFIG, 120_000);
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-        props.put(KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
-        props.put(VALUE_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+        Map<String, Object> props = baseProducerProps(env);
         props.put(TRANSACTIONAL_ID_CONFIG,
             env.getProperty("spring.kafka.producer.transaction-id-prefix", "orch-") + UUID.randomUUID());
         customizer.customizeProducer(props);
         return new DefaultKafkaProducerFactory<>(props);
     }
 
-    @Bean
+    
+    @Bean(name = "nonTransactionalProducerFactory")
+    public ProducerFactory<String, String> nonTransactionalProducerFactory(
+        org.springframework.core.env.Environment env,
+        KafkaClientCustomizer customizer
+    ) {
+        Map<String, Object> props = baseProducerProps(env);
+        customizer.customizeProducer(props);
+        props.remove(TRANSACTIONAL_ID_CONFIG);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+@Bean
     public ConsumerFactory<String, String> consumerFactory(
         org.springframework.core.env.Environment env,
         KafkaClientCustomizer customizer
@@ -96,8 +99,32 @@ public class OrchestratorAutoConfiguration {
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
-    @Bean
-    public KafkaTemplate<String, String> kafkaTemplate(ProducerFactory<String, String> producerFactory) {
+    
+    private Map<String, Object> baseProducerProps(org.springframework.core.env.Environment env) {
+        Map<String, Object> props = new HashMap<>();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, env.getProperty("spring.kafka.bootstrap-servers"));
+        props.put(ENABLE_IDEMPOTENCE_CONFIG, true);
+        props.put(ACKS_CONFIG, "all");
+        props.put(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
+        props.put(COMPRESSION_TYPE_CONFIG, "zstd");
+        props.put(LINGER_MS_CONFIG, 15);
+        props.put(BATCH_SIZE_CONFIG, 196_608);
+        props.put(DELIVERY_TIMEOUT_MS_CONFIG, 120_000);
+        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        props.put(KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+        props.put(VALUE_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+        return props;
+    }
+@Bean
+    @Primary
+    public KafkaTemplate<String, String> transactionalKafkaTemplate(ProducerFactory<String, String> producerFactory) {
+        KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
+        template.setObservationEnabled(true);
+        return template;
+    }
+
+    @Bean(name = "nonTransactionalKafkaTemplate")
+    public KafkaTemplate<String, String> nonTransactionalKafkaTemplate(@Qualifier("nonTransactionalProducerFactory") ProducerFactory<String, String> producerFactory) {
         KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
         template.setObservationEnabled(true);
         return template;
@@ -154,20 +181,26 @@ public class OrchestratorAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(DataSource.class)
-    public FailureTracker failureTracker(DataSource dataSource, OrchestratorProperties properties) {
-        return new JdbcFailureTracker(dataSource, properties);
+    public FailureTracker failureTracker(Optional<DataSource> dataSource, OrchestratorProperties properties, MeterRegistry meterRegistry) {
+        if (properties.getDbStrategy() == OrchestratorProperties.DbStrategy.NONE || dataSource.isEmpty()) {
+            return new NoopFailureTracker();
+        }
+        JdbcFailureTracker tracker = new JdbcFailureTracker(dataSource.get(), properties);
+        meterRegistry.gauge("orch.db.circuit.open", tracker, t -> t.isCircuitOpen() ? 1.0 : 0.0);
+        meterRegistry.gauge("orch.db.degraded", tracker, t -> t.isDbDegraded() ? 1.0 : 0.0);
+        return tracker;
     }
 
     @Bean
     public OrchestratorService orchestratorService(
-        KafkaTemplate<String, String> template,
+        @Qualifier("transactionalKafkaTemplate") KafkaTemplate<String, String> transactionalTemplate,
+        @Qualifier("nonTransactionalKafkaTemplate") KafkaTemplate<String, String> nonTransactionalTemplate,
         OrchestratorProperties properties,
         MessageTransformer transformer,
         FailureTracker failureTracker,
         MeterRegistry meterRegistry
     ) {
-        return new OrchestratorService(template, properties, transformer, failureTracker, meterRegistry);
+        return new OrchestratorService(transactionalTemplate, nonTransactionalTemplate, properties, transformer, failureTracker, meterRegistry);
     }
 
     @Bean

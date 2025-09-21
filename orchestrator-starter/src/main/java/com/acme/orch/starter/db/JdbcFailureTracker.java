@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import jakarta.annotation.PreDestroy;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -19,6 +20,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class JdbcFailureTracker implements FailureTracker {
     private static final Logger log = LoggerFactory.getLogger(JdbcFailureTracker.class);
@@ -27,12 +30,18 @@ public class JdbcFailureTracker implements FailureTracker {
     private final String table;
     private final OrchestratorProperties props;
     private final AtomicBoolean dbDegraded = new AtomicBoolean(false);
+    private final AtomicInteger consecutiveFailures = new AtomicInteger();
+    private final AtomicLong circuitOpenedAt = new AtomicLong(0L);
+    private final int circuitFailureThreshold;
+    private final long circuitOpenMs;
     private final ExecutorService dbPool = Executors.newVirtualThreadPerTaskExecutor();
 
     public JdbcFailureTracker(DataSource ds, OrchestratorProperties props) {
         this.jdbc = new JdbcTemplate(ds);
         this.table = props.getErrorTable();
         this.props = props;
+        this.circuitFailureThreshold = Math.max(0, props.getDbCircuitFailureThreshold());
+        this.circuitOpenMs = Math.max(0, props.getDbCircuitOpenMs());
         this.jdbc.setQueryTimeout(1); // seconds; we also enforce ms via orTimeout below
     }
 
@@ -112,6 +121,10 @@ public class JdbcFailureTracker implements FailureTracker {
     }
 
     private <T> T runWithTimeout(Callable<T> call, boolean async) {
+        if (shouldShortCircuit()) {
+            log.debug("Skipping database interaction while circuit breaker is open.");
+            return null;
+        }
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
@@ -121,17 +134,15 @@ public class JdbcFailureTracker implements FailureTracker {
                 }
             }, dbPool).orTimeout(props.getDbTimeoutMs(), TimeUnit.MILLISECONDS)
                 .whenComplete((ok, ex) -> {
-                    if (ex != null && props.isDbDegradeDontBlock()) {
-                        if (dbDegraded.compareAndSet(false, true)) {
-                            log.warn("DB degraded; continuing Kafka flow. Cause: {}", ex.toString());
-                        }
-                    } else if (ex == null && dbDegraded.get()) {
-                        dbDegraded.set(false);
-                        log.info("DB recovered; cleared degraded flag.");
+                    if (ex != null) {
+                        onFailure(ex);
+                    } else {
+                        onSuccess();
                     }
                 }).join();
         } catch (CompletionException ce) {
-            log.debug("DB op degraded/failure (non-blocking): {}", ce.toString());
+            Throwable cause = ce.getCause() != null ? ce.getCause() : ce;
+            log.debug("DB op degraded/failure (non-blocking): {}", cause.toString());
             return null;
         }
     }
@@ -139,4 +150,80 @@ public class JdbcFailureTracker implements FailureTracker {
     private <T> T runWithTimeout(Runnable runnable, boolean async) {
         return runWithTimeout(Executors.callable(runnable, null), async);
     }
+
+    
+    private boolean shouldShortCircuit() {
+        if (circuitFailureThreshold <= 0) {
+            return false;
+        }
+        long openedAt = circuitOpenedAt.get();
+        if (openedAt == 0L) {
+            return false;
+        }
+        long elapsed = System.currentTimeMillis() - openedAt;
+        if (elapsed < circuitOpenMs) {
+            if (props.isDbDegradeDontBlock()) {
+                long remaining = Math.max(0L, circuitOpenMs - elapsed);
+                log.debug("Circuit breaker open; skipping DB call for approximately {} ms", remaining);
+                return true;
+            }
+            return false;
+        }
+        if (circuitOpenedAt.compareAndSet(openedAt, 0L)) {
+            consecutiveFailures.set(0);
+        }
+        return false;
+    }
+
+    private void onSuccess() {
+        consecutiveFailures.set(0);
+        circuitOpenedAt.set(0L);
+        if (dbDegraded.get()) {
+            dbDegraded.set(false);
+            log.info("DB recovered; cleared degraded flag.");
+        }
+    }
+
+    private void onFailure(Throwable ex) {
+        if (props.isDbDegradeDontBlock() && dbDegraded.compareAndSet(false, true)) {
+            log.warn("DB degraded; continuing Kafka flow. Cause: {}", ex.toString());
+        }
+        if (circuitFailureThreshold > 0) {
+            int failures = consecutiveFailures.incrementAndGet();
+            if (failures >= circuitFailureThreshold) {
+                if (circuitOpenedAt.compareAndSet(0L, System.currentTimeMillis())) {
+                    log.warn("DB circuit breaker opened after {} consecutive failures; backing off for {}ms", failures, circuitOpenMs);
+                }
+            }
+        }
+    }
+
+    private boolean circuitCurrentlyOpen() {
+        long openedAt = circuitOpenedAt.get();
+        if (openedAt == 0L) {
+            return false;
+        }
+        long elapsed = System.currentTimeMillis() - openedAt;
+        if (elapsed < circuitOpenMs) {
+            return true;
+        }
+        if (circuitOpenedAt.compareAndSet(openedAt, 0L)) {
+            consecutiveFailures.set(0);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isCircuitOpen() {
+        long openedAt = circuitOpenedAt.get();
+        if (openedAt == 0L) {
+            return false;
+        }
+        return System.currentTimeMillis() - openedAt < circuitOpenMs;
+    }
+@PreDestroy
+    void shutdown() {
+        dbPool.shutdown();
+    }
+
 }

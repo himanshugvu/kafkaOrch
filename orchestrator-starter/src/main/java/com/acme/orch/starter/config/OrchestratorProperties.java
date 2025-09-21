@@ -13,7 +13,7 @@ public class OrchestratorProperties {
     private int batchMaxSize = 500;
     private int batchFlushIntervalMs = 200;
 
-    public enum DbStrategy { OUTBOX, RELIABLE, LIGHTWEIGHT }
+    public enum DbStrategy { OUTBOX, RELIABLE, LIGHTWEIGHT, NONE }
     public enum FailureMode { ATOMIC, SKIP_AND_LOG }
 
     private DbStrategy dbStrategy = DbStrategy.RELIABLE;
@@ -24,6 +24,8 @@ public class OrchestratorProperties {
     private boolean dbDegradeDontBlock = true; // keep Kafka flowing on DB issues
 
     private int nonAtomicMaxAttempts = 3;
+    private int dbCircuitFailureThreshold = 5;
+    private long dbCircuitOpenMs = 10000;
 
     /** Payload storage choice: NONE | BYTES | TEXT */
     private String storePayload = "NONE";
@@ -55,6 +57,10 @@ public class OrchestratorProperties {
     public void setDbDegradeDontBlock(boolean dbDegradeDontBlock) { this.dbDegradeDontBlock = dbDegradeDontBlock; }
     public int getNonAtomicMaxAttempts() { return nonAtomicMaxAttempts; }
     public void setNonAtomicMaxAttempts(int nonAtomicMaxAttempts) { this.nonAtomicMaxAttempts = nonAtomicMaxAttempts; }
+    public int getDbCircuitFailureThreshold() { return dbCircuitFailureThreshold; }
+    public void setDbCircuitFailureThreshold(int dbCircuitFailureThreshold) { this.dbCircuitFailureThreshold = dbCircuitFailureThreshold; }
+    public long getDbCircuitOpenMs() { return dbCircuitOpenMs; }
+    public void setDbCircuitOpenMs(long dbCircuitOpenMs) { this.dbCircuitOpenMs = dbCircuitOpenMs; }
     public String getStorePayload() { return storePayload; }
     public void setStorePayload(String storePayload) { this.storePayload = storePayload; }
     public boolean isStorePayloadOnFailureOnly() { return storePayloadOnFailureOnly; }
