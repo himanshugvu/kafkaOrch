@@ -27,7 +27,10 @@
       "Bash(set TARGET_MESSAGES=1000000)",
       "Bash(set KAFKA_BOOTSTRAP_SERVERS=localhost:9094)",
       "Bash(mvn compile:*)",
-      "Bash(mvn test:*)"
+      "Bash(mvn test:*)",
+      "Bash(mvn package:*)",
+      "Bash(java:*)",
+      "Bash(javac:*)"
     ],
     "deny": [],
     "ask": []
