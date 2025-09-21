@@ -2,17 +2,7 @@
   <springProperty scope="context" name="LOGSTASH_DESTINATION" source="logging.logstash.destination" defaultValue="logstash:5044"/>
 
   <appender name="STRUCTURED_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
-      <layout class="org.springframework.boot.logging.logback.JsonLayout">
-        <timestampFormat>ISO_OFFSET_DATE_TIME</timestampFormat>
-        <appendLineSeparator>true</appendLineSeparator>
-        <includeException>true</includeException>
-        <includeContextName>true</includeContextName>
-        <includeMdc>true</includeMdc>
-        <includeMessage>true</includeMessage>
-        <includeThreadName>true</includeThreadName>
-      </layout>
-    </encoder>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
   </appender>
 
   <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">

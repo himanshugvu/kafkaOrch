@@ -52,12 +52,8 @@ public class OrchestratorAutoConfiguration {
         return new KafkaClientCustomizer() {};
     }
 
-    @Bean(name = "orchestratorProperties")
-    public OrchestratorProperties orchestratorPropertiesAlias(OrchestratorProperties properties) {
-        return properties;
-    }
-
     @Bean
+    @Primary
     public ProducerFactory<String, String> producerFactory(
         org.springframework.core.env.Environment env,
         KafkaClientCustomizer customizer
@@ -69,7 +65,6 @@ public class OrchestratorAutoConfiguration {
         return new DefaultKafkaProducerFactory<>(props);
     }
 
-    
     @Bean(name = "nonTransactionalProducerFactory")
     public ProducerFactory<String, String> nonTransactionalProducerFactory(
         org.springframework.core.env.Environment env,
@@ -117,7 +112,7 @@ public class OrchestratorAutoConfiguration {
     }
 @Bean
     @Primary
-    public KafkaTemplate<String, String> transactionalKafkaTemplate(ProducerFactory<String, String> producerFactory) {
+    public KafkaTemplate<String, String> transactionalKafkaTemplate(@Qualifier("producerFactory") ProducerFactory<String, String> producerFactory) {
         KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
         template.setObservationEnabled(true);
         return template;
@@ -131,7 +126,7 @@ public class OrchestratorAutoConfiguration {
     }
 
     @Bean
-    public KafkaTransactionManager<String, String> kafkaTxManager(ProducerFactory<String, String> producerFactory) {
+    public KafkaTransactionManager<String, String> kafkaTxManager(@Qualifier("producerFactory") ProducerFactory<String, String> producerFactory) {
         return new KafkaTransactionManager<>(producerFactory);
     }
 
@@ -214,3 +209,4 @@ public class OrchestratorAutoConfiguration {
         return new TimeoutSafeguard(failureTracker, meterRegistry);
     }
 }
+

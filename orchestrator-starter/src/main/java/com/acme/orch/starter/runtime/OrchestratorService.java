@@ -96,7 +96,13 @@ public class OrchestratorService {
             ensureReceivedRow(rec, dedupKey);
         }
 
-        CompletableFuture.supplyAsync(() -> transformer.transform(rec.value()), transformPool)
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return transformer.transform(rec.value());
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, transformPool)
             .thenAcceptAsync(out -> {
                 MDC.put("dedupKey", dedupKey);
                 try {
@@ -248,8 +254,14 @@ public class OrchestratorService {
         String dedupKey,
         int remainingAttempts) {
 
-        return CompletableFuture.supplyAsync(() -> transformer.transform(rec.value()), transformPool)
-            .thenCompose(out -> toCompletableFuture(nonTransactionalTemplate.send(producerRecord(rec, out, dedupKey)))
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return transformer.transform(rec.value());
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, transformPool)
+            .thenCompose(out -> toCompletable(nonTransactionalTemplate.send(producerRecord(rec, out, dedupKey)))
                 .thenApply(ignored -> out))
             .thenApply(out -> {
                 if (strategy == DbStrategy.RELIABLE || strategy == DbStrategy.OUTBOX) {
@@ -493,17 +505,14 @@ public class OrchestratorService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <T> CompletableFuture<T> toCompletableFuture(Object future) {
-        if (future instanceof CompletableFuture<?> cf) {
-            return (CompletableFuture<T>) cf;
-        }
-        if (future instanceof ListenableFuture<?> lf) {
-            CompletableFuture<T> completable = new CompletableFuture<>();
-            ((ListenableFuture<T>) lf).addCallback(completable::complete, completable::completeExceptionally);
-            return completable;
-        }
-        throw new IllegalArgumentException("Unsupported future type: " + future);
+    private <T> CompletableFuture<T> toCompletable(CompletableFuture<T> future) {
+        return future;
+    }
+
+    private <T> CompletableFuture<T> toCompletable(ListenableFuture<T> future) {
+        CompletableFuture<T> completable = new CompletableFuture<>();
+        future.addCallback(completable::complete, completable::completeExceptionally);
+        return completable;
     }
 
     private void recordAtomicFailure(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
