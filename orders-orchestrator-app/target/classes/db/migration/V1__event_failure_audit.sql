@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS event_failures (
   source_topic   VARCHAR(255) NOT NULL,
   target_topic   VARCHAR(255) NOT NULL,
   partition      INT NOT NULL,
-  offset         BIGINT NOT NULL,
+  "offset"       BIGINT NOT NULL,
   message_key    TEXT,
   headers_text   TEXT,
   payload_bytes  BYTEA,      -- prefer BYTES for speed if you must store payloads

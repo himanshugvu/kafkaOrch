@@ -24,8 +24,7 @@ state = {"sent": 0, "received": 0, "stopped": False}
 latency_lock = threading.Lock()
 latency_buffer = []
 LATENCY_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-LATENCY_OUTPUT.write_text("latency_ms
-", encoding="utf-8")
+LATENCY_OUTPUT.write_text("latency_ms\n", encoding="utf-8")
 environment_holder = {"env": None}
 
 
@@ -41,8 +40,7 @@ def _flush_latencies_locked() -> None:
         return
     with LATENCY_OUTPUT.open("a", encoding="utf-8") as fh:
         for value in latency_buffer:
-            fh.write(f"{value}
-")
+            fh.write(f"{value}\n")
     latency_buffer.clear()
 
 

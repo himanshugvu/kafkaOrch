@@ -2,7 +2,30 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(mvn clean:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(chmod:*)",
+      "Bash(export LOCUST_TARGET_MESSAGES=1000)",
+      "Bash(locust:*)",
+      "Bash(pip show:*)",
+      "Bash(./observability/setup_kibana.sh:*)",
+      "Bash(./observability/create_dashboard.sh:*)",
+      "Bash(./observability/verify_setup.sh:*)",
+      "Bash(set LOCUST_TARGET_MESSAGES=1000)",
+      "Bash(./docker-load-test.sh:*)",
+      "Bash(docker stop:*)",
+      "Bash(set TARGET_MESSAGES=10000)",
+      "Bash(set TARGET_MESSAGES=1000)",
+      "Bash(./load-test/docker-load-test.sh:*)",
+      "Bash(set TARGET_MESSAGES=1000000)",
+      "Bash(set KAFKA_BOOTSTRAP_SERVERS=localhost:9094)"
     ],
     "deny": [],
     "ask": []

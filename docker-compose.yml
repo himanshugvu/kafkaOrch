@@ -15,10 +15,21 @@ services:
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_NUM_PARTITIONS=3
+      - KAFKA_CFG_NUM_PARTITIONS=12
       - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - ALLOW_PLAINTEXT_LISTENER=yes
+      # High throughput optimizations
+      - KAFKA_CFG_SOCKET_SEND_BUFFER_BYTES=102400
+      - KAFKA_CFG_SOCKET_RECEIVE_BUFFER_BYTES=102400
+      - KAFKA_CFG_SOCKET_REQUEST_MAX_BYTES=104857600
+      - KAFKA_CFG_NUM_NETWORK_THREADS=8
+      - KAFKA_CFG_NUM_IO_THREADS=8
+      - KAFKA_CFG_BACKGROUND_THREADS=10
+      - KAFKA_CFG_NUM_REPLICA_FETCHERS=4
+      - KAFKA_CFG_REPLICA_FETCH_MAX_BYTES=1048576
+      - KAFKA_CFG_MESSAGE_MAX_BYTES=1000000
+      - KAFKA_CFG_REPLICA_FETCH_RESPONSE_MAX_BYTES=10485760
     volumes:
       - kafka_data:/bitnami/kafka
     healthcheck:
@@ -43,7 +54,7 @@ services:
       timeout: 5s
       retries: 10
 
-  orders-orchestrator:
+  orders-orchestrator-1:
     build: .
     depends_on:
       kafka:
@@ -60,16 +71,86 @@ services:
       SOURCE_TOPIC: orders.raw
       TARGET_TOPIC: orders.enriched
       GROUP_ID: orders-orchestrator
+      CONCURRENCY: 3
       DB_STRATEGY: RELIABLE
       LOGGING_LOGSTASH_DESTINATION: ${LOGGING_LOGSTASH_DESTINATION:-logstash:5044}
     ports:
       - "8080:8080"
 
+  orders-orchestrator-2:
+    build: .
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JDBC_URL: jdbc:postgresql://postgres:5432/orch?reWriteBatchedInserts=true
+      JDBC_USER: postgres
+      JDBC_PASSWORD: postgres
+      SOURCE_TOPIC: orders.raw
+      TARGET_TOPIC: orders.enriched
+      GROUP_ID: orders-orchestrator
+      CONCURRENCY: 3
+      DB_STRATEGY: RELIABLE
+      LOGGING_LOGSTASH_DESTINATION: ${LOGGING_LOGSTASH_DESTINATION:-logstash:5044}
+    ports:
+      - "8081:8080"
+
+  orders-orchestrator-3:
+    build: .
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JDBC_URL: jdbc:postgresql://postgres:5432/orch?reWriteBatchedInserts=true
+      JDBC_USER: postgres
+      JDBC_PASSWORD: postgres
+      SOURCE_TOPIC: orders.raw
+      TARGET_TOPIC: orders.enriched
+      GROUP_ID: orders-orchestrator
+      CONCURRENCY: 3
+      DB_STRATEGY: RELIABLE
+      LOGGING_LOGSTASH_DESTINATION: ${LOGGING_LOGSTASH_DESTINATION:-logstash:5044}
+    ports:
+      - "8082:8080"
+
+  orders-orchestrator-4:
+    build: .
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JDBC_URL: jdbc:postgresql://postgres:5432/orch?reWriteBatchedInserts=true
+      JDBC_USER: postgres
+      JDBC_PASSWORD: postgres
+      SOURCE_TOPIC: orders.raw
+      TARGET_TOPIC: orders.enriched
+      GROUP_ID: orders-orchestrator
+      CONCURRENCY: 3
+      DB_STRATEGY: RELIABLE
+      LOGGING_LOGSTASH_DESTINATION: ${LOGGING_LOGSTASH_DESTINATION:-logstash:5044}
+    ports:
+      - "8083:8080"
+
   locust:
     image: locustio/locust:2.26.0
     profiles: ["load"]
     depends_on:
-      orders-orchestrator:
+      orders-orchestrator-1:
         condition: service_started
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -125,6 +206,17 @@ services:
       - "5601:5601"
     depends_on:
       elasticsearch:
+        condition: service_healthy
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka:
         condition: service_healthy
 
 volumes:
