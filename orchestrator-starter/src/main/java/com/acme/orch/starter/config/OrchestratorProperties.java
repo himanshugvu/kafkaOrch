@@ -13,6 +13,9 @@ public class OrchestratorProperties {
     private int batchMaxSize = 500;
     private int batchFlushIntervalMs = 200;
 
+    private int commitBatchSize = 1;
+    private long commitFlushIntervalMs = 500;
+
     public enum DbStrategy { OUTBOX, RELIABLE, LIGHTWEIGHT, NONE }
     public enum FailureMode { ATOMIC, SKIP_AND_LOG }
 
@@ -61,6 +64,11 @@ public class OrchestratorProperties {
     public void setDbCircuitFailureThreshold(int dbCircuitFailureThreshold) { this.dbCircuitFailureThreshold = dbCircuitFailureThreshold; }
     public long getDbCircuitOpenMs() { return dbCircuitOpenMs; }
     public void setDbCircuitOpenMs(long dbCircuitOpenMs) { this.dbCircuitOpenMs = dbCircuitOpenMs; }
+    public int getCommitBatchSize() { return commitBatchSize; }
+    public void setCommitBatchSize(int commitBatchSize) { this.commitBatchSize = Math.max(1, commitBatchSize); }
+    public long getCommitFlushIntervalMs() { return commitFlushIntervalMs; }
+    public void setCommitFlushIntervalMs(long commitFlushIntervalMs) { this.commitFlushIntervalMs = Math.max(0L, commitFlushIntervalMs); }
+
     public String getStorePayload() { return storePayload; }
     public void setStorePayload(String storePayload) { this.storePayload = storePayload; }
     public boolean isStorePayloadOnFailureOnly() { return storePayloadOnFailureOnly; }

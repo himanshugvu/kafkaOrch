@@ -23,6 +23,16 @@
       "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
     },
     {
+      "name": "orchestrator.commit-batch-size",
+      "type": "java.lang.Integer",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
+      "name": "orchestrator.commit-flush-interval-ms",
+      "type": "java.lang.Long",
+      "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"
+    },
+    {
       "name": "orchestrator.consumer-concurrency",
       "type": "java.lang.Integer",
       "sourceType": "com.acme.orch.starter.config.OrchestratorProperties"

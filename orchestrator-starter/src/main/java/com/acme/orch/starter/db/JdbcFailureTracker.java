@@ -142,6 +142,13 @@ public class JdbcFailureTracker implements FailureTracker {
                 }).join();
         } catch (CompletionException ce) {
             Throwable cause = ce.getCause() != null ? ce.getCause() : ce;
+            if (!props.isDbDegradeDontBlock() && !async) {
+                log.warn("DB op failed; propagating because dbDegradeDontBlock=false. Cause: {}", cause.toString());
+                if (cause instanceof RuntimeException runtime) {
+                    throw runtime;
+                }
+                throw new RuntimeException(cause);
+            }
             log.debug("DB op degraded/failure (non-blocking): {}", cause.toString());
             return null;
         }
