@@ -13,6 +13,7 @@
   <properties>
     <java.version>21</java.version>
     <spring-boot.version>3.4.0</spring-boot.version>
+    <flyway.version>10.22.0</flyway.version>
     <orch.version>1.0.0</orch.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -59,6 +60,7 @@
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
+      <version>${flyway.version}</version>
     </dependency>
     <dependency>
       <groupId>org.postgresql</groupId>

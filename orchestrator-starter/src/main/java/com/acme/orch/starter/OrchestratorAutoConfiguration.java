@@ -41,6 +41,16 @@ import static org.apache.kafka.clients.producer.ProducerConfig.*;
 public class OrchestratorAutoConfiguration {
 
     @Bean
+    public static org.springframework.beans.factory.config.BeanFactoryPostProcessor orchestratorPropertiesAliasPostProcessor() {
+        return beanFactory -> {
+            String targetBeanName = "orchestrator-com.acme.orch.starter.config.OrchestratorProperties";
+            if (beanFactory.containsBean(targetBeanName) && !beanFactory.containsBean("orchestratorProperties")) {
+                beanFactory.registerAlias(targetBeanName, "orchestratorProperties");
+            }
+        };
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     public MessageTransformer messageTransformer() {
         return input -> input;
