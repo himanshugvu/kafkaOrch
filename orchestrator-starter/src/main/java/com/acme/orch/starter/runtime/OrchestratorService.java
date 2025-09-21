@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.kafka.support.Acknowledgment;
 
 import java.nio.charset.StandardCharsets;
@@ -261,7 +260,7 @@ public class OrchestratorService {
                 throw new CompletionException(e);
             }
         }, transformPool)
-            .thenCompose(out -> toCompletable(nonTransactionalTemplate.send(producerRecord(rec, out, dedupKey)))
+            .thenCompose(out -> nonTransactionalTemplate.send(producerRecord(rec, out, dedupKey))
                 .thenApply(ignored -> out))
             .thenApply(out -> {
                 if (strategy == DbStrategy.RELIABLE || strategy == DbStrategy.OUTBOX) {
@@ -505,15 +504,6 @@ public class OrchestratorService {
         }
     }
 
-    private <T> CompletableFuture<T> toCompletable(CompletableFuture<T> future) {
-        return future;
-    }
-
-    private <T> CompletableFuture<T> toCompletable(ListenableFuture<T> future) {
-        CompletableFuture<T> completable = new CompletableFuture<>();
-        future.addCallback(completable::complete, completable::completeExceptionally);
-        return completable;
-    }
 
     private void recordAtomicFailure(org.apache.kafka.clients.consumer.ConsumerRecord<String, String> rec,
                                      Exception ex,

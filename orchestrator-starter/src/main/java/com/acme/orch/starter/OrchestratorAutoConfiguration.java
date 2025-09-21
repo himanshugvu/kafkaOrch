@@ -3,6 +3,7 @@ package com.acme.orch.starter;
 import com.acme.orch.core.KafkaClientCustomizer;
 import com.acme.orch.core.MessageTransformer;
 import com.acme.orch.db.FailureTracker;
+import com.acme.orch.starter.config.KafkaClientProperties;
 import com.acme.orch.starter.config.OrchestratorProperties;
 import com.acme.orch.starter.db.JdbcFailureTracker;
 import com.acme.orch.starter.db.NoopFailureTracker;
@@ -14,9 +15,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -30,14 +32,13 @@ import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.*;
 
 @AutoConfiguration
 @EnableKafka
 @EnableScheduling
-@EnableConfigurationProperties(OrchestratorProperties.class)
+@EnableConfigurationProperties({OrchestratorProperties.class, KafkaClientProperties.class})
 public class OrchestratorAutoConfiguration {
 
     @Bean
@@ -66,61 +67,110 @@ public class OrchestratorAutoConfiguration {
     @Primary
     public ProducerFactory<String, String> producerFactory(
         org.springframework.core.env.Environment env,
-        KafkaClientCustomizer customizer
+        KafkaClientCustomizer customizer,
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties
     ) {
-        Map<String, Object> props = baseProducerProps(env);
-        props.put(TRANSACTIONAL_ID_CONFIG,
-            env.getProperty("spring.kafka.producer.transaction-id-prefix", "orch-") + UUID.randomUUID());
+        Map<String, Object> props = producerProps(env, kafkaProperties, kafkaClientProperties);
         customizer.customizeProducer(props);
-        return new DefaultKafkaProducerFactory<>(props);
+        DefaultKafkaProducerFactory<String, String> factory = new DefaultKafkaProducerFactory<>(props);
+        if (!Boolean.FALSE.equals(props.get(ENABLE_IDEMPOTENCE_CONFIG))) {
+            String prefix = resolveTransactionIdPrefix(kafkaProperties, kafkaClientProperties);
+            if (prefix != null && !prefix.isBlank()) {
+                factory.setTransactionIdPrefix(prefix);
+            }
+        }
+        return factory;
     }
 
     @Bean(name = "nonTransactionalProducerFactory")
     public ProducerFactory<String, String> nonTransactionalProducerFactory(
         org.springframework.core.env.Environment env,
-        KafkaClientCustomizer customizer
+        KafkaClientCustomizer customizer,
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties
     ) {
-        Map<String, Object> props = baseProducerProps(env);
+        Map<String, Object> props = producerProps(env, kafkaProperties, kafkaClientProperties);
         customizer.customizeProducer(props);
         props.remove(TRANSACTIONAL_ID_CONFIG);
         return new DefaultKafkaProducerFactory<>(props);
     }
-@Bean
+
+    @Bean
     public ConsumerFactory<String, String> consumerFactory(
         org.springframework.core.env.Environment env,
-        KafkaClientCustomizer customizer
+        KafkaClientCustomizer customizer,
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties,
+        OrchestratorProperties orchestratorProperties
     ) {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, env.getProperty("spring.kafka.bootstrap-servers"));
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 500);
-        props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1_048_576);
-        props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 50);
-        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 5_242_880);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringDeserializer.class);
+        Map<String, Object> props = consumerProps(env, kafkaProperties, kafkaClientProperties, orchestratorProperties);
         customizer.customizeConsumer(props);
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
     
-    private Map<String, Object> baseProducerProps(org.springframework.core.env.Environment env) {
-        Map<String, Object> props = new HashMap<>();
-        props.put(BOOTSTRAP_SERVERS_CONFIG, env.getProperty("spring.kafka.bootstrap-servers"));
-        props.put(ENABLE_IDEMPOTENCE_CONFIG, true);
-        props.put(ACKS_CONFIG, "all");
-        props.put(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-        props.put(COMPRESSION_TYPE_CONFIG, "zstd");
-        props.put(LINGER_MS_CONFIG, 15);
-        props.put(BATCH_SIZE_CONFIG, 196_608);
-        props.put(DELIVERY_TIMEOUT_MS_CONFIG, 120_000);
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-        props.put(KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
-        props.put(VALUE_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+    private Map<String, Object> producerProps(
+        org.springframework.core.env.Environment env,
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties
+    ) {
+        Map<String, Object> props = new HashMap<>(kafkaProperties.buildProducerProperties(null));
+        KafkaClientProperties.Producer defaults = kafkaClientProperties.getProducer();
+        defaults.applyDefaults(props);
+        if (!props.containsKey(BOOTSTRAP_SERVERS_CONFIG)) {
+            String bootstrap = defaults.getBootstrapServers();
+            if (bootstrap == null) {
+                bootstrap = env.getProperty("spring.kafka.bootstrap-servers");
+            }
+            if (bootstrap != null) {
+                props.put(BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+            }
+        }
         return props;
     }
-@Bean
+
+    private Map<String, Object> consumerProps(
+        org.springframework.core.env.Environment env,
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties,
+        OrchestratorProperties orchestratorProperties
+    ) {
+        Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
+        KafkaClientProperties.Consumer defaults = kafkaClientProperties.getConsumer();
+        defaults.applyDefaults(props);
+        if (!props.containsKey(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+            String bootstrap = defaults.getBootstrapServers();
+            if (bootstrap == null) {
+                bootstrap = env.getProperty("spring.kafka.bootstrap-servers");
+            }
+            if (bootstrap != null) {
+                props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+            }
+        }
+        if (!props.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
+            String groupId = defaults.getGroupId();
+            if (groupId == null) {
+                groupId = orchestratorProperties.getGroupId();
+            }
+            if (groupId != null) {
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+            }
+        }
+        return props;
+    }
+
+    private String resolveTransactionIdPrefix(
+        KafkaProperties kafkaProperties,
+        KafkaClientProperties kafkaClientProperties
+    ) {
+        if (kafkaProperties.getProducer().getTransactionIdPrefix() != null) {
+            return kafkaProperties.getProducer().getTransactionIdPrefix();
+        }
+        return kafkaClientProperties.getProducer().getTransactionIdPrefix();
+    }
+
+    @Bean
     @Primary
     public KafkaTemplate<String, String> transactionalKafkaTemplate(@Qualifier("producerFactory") ProducerFactory<String, String> producerFactory) {
         KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
